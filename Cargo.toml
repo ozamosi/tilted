@@ -1,0 +1,28 @@
+[package]
+name = "tilted"
+version = "0.1.0"
+authors = ["Robin Sonefors <robin@sonefors.net>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1.40"
+clap = "3.0.0-beta.2"
+env_logger = "0.7.1"
+handlebars = "3.5"
+http = "0.2.1"
+humantime-serde = "1.0"
+libbluetooth = {version = "0.1", features = ["impl-default"]}
+libc = "0.2.79"
+nom = "5.1"
+num-derive = "0.3"
+num-traits = "0.2"
+prometheus = {git = "https://github.com/adamchalmers/rust-prometheus.git", branch="master", features = ["push"]} # For async push support: https://github.com/tikv/rust-prometheus/pull/343
+reqwest = {version = "0.10.8", features = ["json"]}
+serde = {version = "1.0", features = ["derive"]}
+thiserror = "1.0"
+tokio = {version = "0.2", features = ["macros", "io-util", "uds"]}
+toml = "0.5.6"
+tracing = "0.1.19"
+url = "2.1"
+uuid = "0.8.1"

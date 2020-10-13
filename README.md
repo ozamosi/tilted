@@ -59,12 +59,12 @@ The HTTP(s) emitter allows you to format a payload to send to a cloud
 service. It takes the following options:
 |Name|Required?|Default|Description|Example|
 |----|---------|-------|-----------|-------|
-|url|✔|N/A|The full URL to send the request to|url = "http://log.brewfather.net/stream?id=xz83XTFteh"|
-|method| |POST|HTTP method. Probably one of POST, GET, PUT.|method = "POST"|
-|content-type| |application/json|The content type to send to the server. Note: this does not affect the serialization format, see the `format` key for that.|content-type = "application/json"|
+|url|✔|N/A|The full URL to send the request to|`url = "http://log.brewfather.net/stream?id=xz83XTFteh"`|
+|method| |POST|HTTP method. Probably one of POST, GET, PUT.|`method = "POST"`|
+|content-type| |application/json|The content type to send to the server. Note: this does not affect the serialization format, see the `format` key for that.|`content-type = "application/json"`|
 |format| |json|The serialisation format. One of `json`, `query` and `form`, for a json encoded body, query parameters, and form encoded body, respectively.|format = "query"|
-|min-interval| |5m|The minimum interval to wait between sending data to the service, for rate limiting. The default value is "5m", meaning 5 minutes.|min-interval="1h5m20s"|
-|payload|✔|N/A|What to put into the payload to send to the server. This is a table where all keys and values are sent through a mustache encoder that has the variables `color`, `gravity` and `temperature` available.|payload={"device": "tilt", "color": "{{ color }}", "temperature": "{{ temperature }}", "gravity": "{{ gravity }}"}|
+|min-interval| |5m|The minimum interval to wait between sending data to the service, for rate limiting. The default value is "5m", meaning 5 minutes.|`min-interval="1h5m20s"`|
+|payload|✔|N/A|What to put into the payload to send to the server. This is a table where all keys and values are sent through a mustache encoder that has the variables `color`, `gravity` and `temperature` available.|`payload={"device": "tilt", "color": "{{ color }}", "temperature": "{{ temperature }}", "gravity": "{{ gravity }}"}`|
 
 ## Prometheus emitter
 The prometheus emitter uses the pushgateway to submit metrics. It
@@ -72,9 +72,9 @@ associates the color as a label for each metric. It takes the
 following options:
 |Name|Required?|Default|Description|Example|
 |----|---------|-------|-----------|-------|
-|address|✔|N/A|The address of the prometheus push gateway, with or without protocol|address="localhost:9091"|
-|temp-gauge-name|✔|N/A|The gauge name to use for the temperature.|temp-gauge-name="tilted_temperature_f"|
-|gravity-gauge-name|✔|N/A|The gauge name to use for the gravity.|gravity-gauge-name="tilted_gravity_sg"|
+|address|✔|N/A|The address of the prometheus push gateway, with or without protocol|`address="localhost:9091"`|
+|temp-gauge-name|✔|N/A|The gauge name to use for the temperature.|`temp-gauge-name="tilted_temperature_f"`|
+|gravity-gauge-name|✔|N/A|The gauge name to use for the gravity.|`gravity-gauge-name="tilted_gravity_sg"`|
 
 # License
 Licensed under either of

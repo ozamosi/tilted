@@ -1,3 +1,4 @@
+mod bluez;
 mod bt;
 mod bt_parsing;
 mod emitters;

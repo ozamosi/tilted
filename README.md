@@ -19,7 +19,7 @@ You can also use the docker image:
  docker pull ozamosi/tilted
 
 # Usage
-Running tilted after installing is as simple as `tilted --config
+Running tilted after installing is as simple as `sudo tilted --config
 tilted.toml`.
 
 To run it inside docker, you need to run something like the

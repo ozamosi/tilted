@@ -1,32 +1,18 @@
+use crate::bluez::{enable_le_scan, open, set_filter};
 use crate::bt_parsing::bt_parser;
 use crate::event::{Color, Dispatcher, Event};
 use crate::ibeacon_parsing::{ibeacon_parser, IBeacon};
 use anyhow::Result;
 use nom::error::ErrorKind;
 use std::convert::{TryFrom, TryInto};
-use std::ffi::c_void;
-use std::os::unix::{
-    io::{FromRawFd, RawFd},
-    net::UnixStream as StdUnixStream,
-};
+use std::os::unix::{io::FromRawFd, net::UnixStream as StdUnixStream};
 use thiserror::Error;
 use tokio::{
-    io::{self, AsyncReadExt, BufReader},
+    io::{AsyncReadExt, BufReader},
     net::UnixStream,
 };
 use tracing::error;
 use uuid::Uuid;
-
-use libbluetooth::{
-    bluetooth::{bdaddr_t, SOL_HCI},
-    hci::{
-        hci_filter, EVT_LE_META_EVENT, HCI_EVENT_PKT, HCI_FILTER, OCF_LE_SET_SCAN_ENABLE,
-        OGF_LE_CTL,
-    },
-    hci_lib::{
-        hci_filter_set_event, hci_filter_set_ptype, hci_get_route, hci_open_dev, hci_send_cmd,
-    },
-};
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -97,38 +83,11 @@ impl TryFrom<IBeacon> for Event {
 }
 
 pub async fn run(dispatcher: &Dispatcher) -> Result<()> {
-    let mut x = bdaddr_t { b: [0; 6] };
-    let idx = unsafe { hci_get_route(&mut x) };
-    let fd: RawFd = unsafe { hci_open_dev(idx) };
+    let fd = open()?;
 
-    if fd < 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    unsafe {
-        hci_send_cmd(
-            fd,
-            OGF_LE_CTL as u16,
-            OCF_LE_SET_SCAN_ENABLE as u16,
-            1,
-            &mut 1u32 as *mut u32 as *mut c_void,
-        )
-    };
-
-    let mut filter: hci_filter = Default::default();
-    hci_filter_set_event(EVT_LE_META_EVENT, &mut filter);
-    hci_filter_set_ptype(HCI_EVENT_PKT, &mut filter);
-    unsafe {
-        libc::setsockopt(
-            fd,
-            SOL_HCI,
-            HCI_FILTER,
-            &filter as *const hci_filter as *const c_void,
-            std::mem::size_of::<hci_filter>() as u32,
-        )
-    };
-
-    let stream = UnixStream::from_std(unsafe { StdUnixStream::from_raw_fd(fd) })?;
+    let mut stream = UnixStream::from_std(unsafe { StdUnixStream::from_raw_fd(fd) })?;
+    set_filter(&stream)?;
+    enable_le_scan(&mut stream).await?;
     let mut reader = BufReader::new(stream);
 
     main_loop(&mut reader, &dispatcher).await;
@@ -136,7 +95,7 @@ pub async fn run(dispatcher: &Dispatcher) -> Result<()> {
 }
 
 async fn main_loop<'a>(reader: &mut BufReader<UnixStream>, dispatcher: &Dispatcher) {
-    let mut buf = [0u8; 255];
+    let mut buf = [0u8; 258];
     loop {
         let response = reader.read_exact(&mut buf[..3]).await;
         if let Err(e) = response {

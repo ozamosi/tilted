@@ -3,6 +3,10 @@ name = "tilted"
 version = "0.1.0"
 authors = ["Robin Sonefors <robin@sonefors.net>"]
 edition = "2018"
+description = "Tool for interacting with a tilt hydrometer"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ozamosi/tilted"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0"

@@ -1,2 +1,2 @@
 [log]
-emitter = log
+emitter = "log"

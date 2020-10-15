@@ -3,6 +3,10 @@ name = "tilted"
 version = "0.1.0"
 authors = ["Robin Sonefors <robin@sonefors.net>"]
 edition = "2018"
+description = "Tool for interacting with a tilt hydrometer"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ozamosi/tilted"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0"
@@ -16,7 +20,7 @@ libc = "0.2.79"
 nom = "5.1"
 num-derive = "0.3"
 num-traits = "0.2"
-prometheus = {git = "https://github.com/adamchalmers/rust-prometheus.git", branch="master", features = ["push"]} # For async push support: https://github.com/tikv/rust-prometheus/pull/343
+prometheus = {git = "https://github.com/adamchalmers/rust-prometheus.git", rev="fa8d2686ebf6a43d83eb13dff91cbd5d286aebf1", features = ["push"]} # For async push support: https://github.com/tikv/rust-prometheus/pull/343
 reqwest = {version = "0.10.8", features = ["json"]}
 serde = {version = "1.0", features = ["derive"]}
 thiserror = "1.0"

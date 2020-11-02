@@ -1,6 +1,6 @@
 FROM rust:1.47-slim
 
-RUN apt update && apt install -y pkg-config libssl-dev
+RUN apt update && apt install -y pkg-config libssl-dev && apt clean
 
 WORKDIR /usr/src/tilted
 

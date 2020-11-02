@@ -11,6 +11,6 @@ RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo build --release
 
 ADD src /usr/src/tilted/src
 
-RUN cargo build --release
+RUN cargo build --release && cargo install --bins --path . && rm -rf target
 
 CMD tilted -c /etc/tilted/tilted.conf

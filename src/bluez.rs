@@ -109,6 +109,12 @@ pub enum HciType {
     VendorPkt = 0xff,
 }
 
+impl From<HciType> for [u8; 4] {
+    fn from(hcitype: HciType) -> [u8; 4] {
+        (hcitype as u32).to_le_bytes()
+    }
+}
+
 #[repr(i32)]
 #[derive(Debug, Copy, Clone)]
 #[allow(dead_code)]
@@ -128,6 +134,7 @@ struct SockAddrHci {
     pub hci_channel: HciChannel,
 }
 
+// TODO: Ogf and Ocf should be the same command type
 #[repr(u16)]
 #[derive(FromPrimitive, ToPrimitive, Copy, Clone, Debug)]
 pub enum Ogf {
@@ -140,6 +147,18 @@ pub enum Ogf {
     TestingCmd = 0x3e,
     LeCtl = 0x08,
     VendorCmd = 0x3f,
+}
+
+pub enum Ocf {
+    LeCtl(LeCtl),
+}
+
+impl From<Ocf> for u16 {
+    fn from(ocf: Ocf) -> u16 {
+        match ocf {
+            Ocf::LeCtl(lectl) => lectl as u16,
+        }
+    }
 }
 
 #[repr(u16)]
@@ -185,12 +204,24 @@ pub enum LeCtl {
 #[repr(packed)]
 #[allow(dead_code)]
 struct HciCommandHdr {
-    opcode: u16,
+    opcode: Opcode,
     plen: u8,
 }
 
-fn cmd_opcode_pack(ogf: u16, ocf: u16) -> u16 {
-    (ogf << 10) & (ocf & 0x3ff)
+struct Opcode(u16);
+
+impl From<(Ogf, Ocf)> for Opcode {
+    fn from((ogf, ocf): (Ogf, Ocf)) -> Opcode {
+        let ogf = ogf as u16;
+        let ocf: u16 = ocf.into();
+        Opcode((ogf << 10) & (ocf & 0x3ff))
+    }
+}
+
+impl From<Opcode> for [u8; 2] {
+    fn from(opcode: Opcode) -> [u8; 2] {
+        opcode.0.to_le_bytes()
+    }
 }
 
 pub fn open() -> Result<RawFd, io::Error> {
@@ -232,14 +263,16 @@ pub fn open() -> Result<RawFd, io::Error> {
     Ok(fd)
 }
 
+// TODO: this bit flipping should be on the type level
 pub async fn enable_le_scan(stream: &mut UnixStream) -> Result<(), io::Error> {
-    let ogf = Ogf::LeCtl as u16;
-    let ocf = LeCtl::SetScanEnable as u16;
-    let opcode = cmd_opcode_pack(ogf, ocf);
-
+    let ogf = Ogf::LeCtl;
+    let ocf = Ocf::LeCtl(LeCtl::SetScanEnable);
+    let opcode: Opcode = (ogf, ocf).into();
+    let opcode: [u8; 2] = opcode.into();
+    let hci_type: [u8; 4] = HciType::CommandPkt.into();
     let mut buf = [0u8; 4 + 2 + 3];
-    buf[0..4].copy_from_slice(&(HciType::CommandPkt as u32).to_le_bytes());
-    buf[4..6].copy_from_slice(&opcode.to_le_bytes());
+    buf[0..4].copy_from_slice(&hci_type);
+    buf[4..6].copy_from_slice(&opcode);
     buf[6] = 2; // len
     buf[7] = 1; // enable?
     buf[8] = 1; // repeat?

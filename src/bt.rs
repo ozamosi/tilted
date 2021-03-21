@@ -1,16 +1,16 @@
-use crate::bluez::{enable_le_scan, open, set_filter};
+use crate::bluez::{enable_le_scan, get_filter, open, set_filter, HciEvent, HciFilter, HciType};
 use crate::bt_parsing::bt_parser;
 use crate::event::{Color, Dispatcher, Event};
 use crate::ibeacon_parsing::{ibeacon_parser, IBeacon};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use nom::error::ErrorKind;
-use std::convert::{TryFrom, TryInto};
-use std::os::unix::{io::FromRawFd, net::UnixStream as StdUnixStream};
-use thiserror::Error;
-use tokio::{
-    io::{AsyncReadExt, BufReader},
-    net::UnixStream,
+use std::{
+    convert::{TryFrom, TryInto},
+    os::unix::{io::FromRawFd, net::UnixStream as StdUnixStream},
+    time::Duration,
 };
+use thiserror::Error;
+use tokio::{io::AsyncReadExt, net::UnixStream, time::interval};
 use tracing::error;
 use uuid::Uuid;
 
@@ -85,29 +85,36 @@ impl TryFrom<IBeacon> for Event {
 pub async fn run(dispatcher: &Dispatcher) -> Result<()> {
     let fd = open()?;
 
-    let mut stream = UnixStream::from_std(unsafe { StdUnixStream::from_raw_fd(fd) })?;
-    set_filter(&stream)?;
-    enable_le_scan(&mut stream).await?;
-    let mut reader = BufReader::new(stream);
+    let stream = UnixStream::from_std(unsafe { StdUnixStream::from_raw_fd(fd) })?;
 
-    main_loop(&mut reader, &dispatcher).await;
+    main_loop(stream, &dispatcher).await?;
     Ok(())
 }
 
-async fn main_loop<'a>(reader: &mut BufReader<UnixStream>, dispatcher: &Dispatcher) {
+async fn main_loop<'a>(
+    mut stream: UnixStream,
+    dispatcher: &Dispatcher,
+) -> Result<(), anyhow::Error> {
     let mut buf = [0u8; 258];
+    let mut interval = interval(Duration::from_secs(2));
     loop {
-        let response = reader.read_exact(&mut buf[..3]).await;
-        if let Err(e) = response {
-            error!("Couldn't read header from bluetooth socket: {}", e);
-            return;
-        }
+        interval.tick().await;
+        let old_filter = get_filter(&stream)?;
+        set_filter(
+            &stream,
+            HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
+        )?;
+        enable_le_scan(&mut stream).await?;
+        stream
+            .read_exact(&mut buf[..3])
+            .await
+            .context("Couldn't read header from bluetooth socket")?;
         let len = 3 + buf[2] as usize;
-        let response = reader.read_exact(&mut buf[3..len]).await;
-        if let Err(e) = response {
-            error!("Couldn't read body from bluetooth socket: {}", e);
-            return;
-        }
+        stream
+            .read_exact(&mut buf[3..len])
+            .await
+            .context("Couldn't read body from bluetooth socket")?;
+        set_filter(&stream, old_filter)?;
         if let Ok((_, events)) = bt_parser::<(&[u8], ErrorKind)>()(&buf[..len]) {
             for event in events {
                 if let Ok((_, ibeacon)) = ibeacon_parser::<(&[u8], ErrorKind)>()(&event.data) {

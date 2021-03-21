@@ -5,11 +5,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
 
 #[repr(packed(4))]
-#[derive(Debug, Copy, Clone)]
-struct HciFilter {
+#[derive(Debug, Copy, Clone, Default)]
+pub struct HciFilter {
     type_mask: u32,
     event_mask: u64,
     opcode: u16,
+}
+
+impl HciFilter {
+    pub fn new(type_mask: HciType, event_mask: HciEvent) -> HciFilter {
+        HciFilter {
+            type_mask: 1 << (type_mask as u32),
+            event_mask: event_mask as u64,
+            opcode: 0,
+        }
+    }
 }
 
 #[repr(u64)]
@@ -280,13 +290,26 @@ pub async fn enable_le_scan(stream: &mut UnixStream) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn set_filter(stream: &UnixStream) -> Result<(), io::Error> {
-    let filter = HciFilter {
-        type_mask: 1 << (HciType::EventPkt as u32),
-        event_mask: HciEvent::LeMetaEvent as u64,
-        opcode: 0,
-    };
+pub fn get_filter(stream: &UnixStream) -> Result<HciFilter, io::Error> {
+    let filter = HciFilter::default();
 
+    if unsafe {
+        libc::setsockopt(
+            stream.as_raw_fd(),
+            Sol::HCI as i32,
+            HciSocketOption::Filter as i32,
+            &filter as *const HciFilter as *const c_void,
+            std::mem::size_of::<HciFilter>() as u32,
+        )
+    } < 0
+    {
+        let err = io::Error::last_os_error();
+        return Err(err);
+    }
+    Ok(filter)
+}
+
+pub fn set_filter(stream: &UnixStream, filter: HciFilter) -> Result<(), io::Error> {
     if unsafe {
         libc::setsockopt(
             stream.as_raw_fd(),

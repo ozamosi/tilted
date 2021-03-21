@@ -4,7 +4,7 @@ RUN apt update && apt install -y pkg-config libssl-dev
 
 WORKDIR /usr/src/tilted
 
-ADD Cargo.toml /usr/src/tilted/Cargo.toml
+COPY Cargo.toml Cargo.lock /usr/src/tilted
 
 # Build all dependencies, on their own layer
 RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo build --release

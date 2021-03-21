@@ -1,6 +1,6 @@
-FROM rust:1.50-slim
+FROM rust:1.50-slim AS builder
 
-RUN apt update && apt install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*;
+RUN apt update && apt install -y pkg-config libssl-dev
 
 WORKDIR /usr/src/tilted
 
@@ -11,6 +11,10 @@ RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo build --release
 
 ADD src /usr/src/tilted/src
 
-RUN cargo build --release && cargo install --bins --path . && rm -rf target
+RUN cargo build --release && cp target/release/tilted . && rm -rf target
+
+FROM debian:stable-slim AS runner
+
+COPY --from=builder /usr/src/tilted/src /usr/bin/tilted
 
 CMD tilted -c /etc/tilted/tilted.conf

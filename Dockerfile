@@ -17,4 +17,6 @@ FROM debian:stable-slim AS runner
 
 COPY --from=builder /usr/src/tilted/src /usr/bin/tilted
 
+RUN chmod +x /usr/bin/tilted
+
 CMD tilted -c /etc/tilted/tilted.conf

@@ -1,8 +1,11 @@
 use libc::{c_ushort, c_void};
-use std::io;
-use std::os::unix::io::{AsRawFd, RawFd};
-use tokio::io::AsyncWriteExt;
-use tokio::net::UnixStream;
+use std::{
+    io::{self, Write},
+    os::unix::{
+        io::{AsRawFd, RawFd},
+        net::UnixStream,
+    },
+};
 
 #[repr(packed(4))]
 #[derive(Debug, Copy, Clone, Default)]
@@ -274,7 +277,7 @@ pub fn open() -> Result<RawFd, io::Error> {
 }
 
 // TODO: this bit flipping should be on the type level
-pub async fn enable_le_scan(stream: &mut UnixStream) -> Result<(), io::Error> {
+pub fn enable_le_scan(stream: &mut UnixStream) -> Result<(), io::Error> {
     let ogf = Ogf::LeCtl;
     let ocf = Ocf::LeCtl(LeCtl::SetScanEnable);
     let opcode: Opcode = (ogf, ocf).into();
@@ -286,7 +289,7 @@ pub async fn enable_le_scan(stream: &mut UnixStream) -> Result<(), io::Error> {
     buf[6] = 2; // len
     buf[7] = 1; // enable?
     buf[8] = 1; // repeat?
-    stream.write(&buf).await?;
+    stream.write_all(&buf)?;
     Ok(())
 }
 

@@ -1,7 +1,5 @@
 use crate::emitters::Emitter;
 use serde::Serialize;
-use std::time::Duration;
-use tokio::time::timeout;
 use tracing::warn;
 
 #[derive(Debug, Serialize)]
@@ -44,11 +42,10 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub async fn dispatch(&self, event: &Event) {
+    pub fn dispatch(&self, event: &Event) {
         for module in &self.modules {
-            match timeout(Duration::from_secs(10), module.emit(event)).await {
-                Ok(_) => (),
-                Err(e) => warn!("Couldn't send event: {}", e),
+            if let Err(e) = module.emit(event) {
+                warn!("Error emitting event {}", e);
             }
         }
     }

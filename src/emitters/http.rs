@@ -1,17 +1,17 @@
 use super::{Emitter, EmitterConfig};
 use crate::event::Event;
 use anyhow::Result;
-use async_trait::async_trait;
 use handlebars::Handlebars;
 use http::method::{InvalidMethod, Method};
-use reqwest::{Client, Error as ReqwestError};
+use reqwest::{blocking::Client, Error as ReqwestError};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::{
+    collections::HashMap,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime},
+};
 use thiserror::Error;
-use tokio::sync::Mutex;
 use url::{ParseError, Url};
 
 #[derive(Error, Debug)]
@@ -90,14 +90,15 @@ impl EmitterConfig for HttpOptions {
     }
 }
 
-#[async_trait]
 impl Emitter for Http {
-    async fn emit(&self, event: &Event) -> Result<()> {
-        let mut last_emit = self.last_emit.lock().await;
-        if *last_emit + self.min_interval > SystemTime::now() {
-            return Ok(());
+    fn emit(&self, event: &Event) -> Result<()> {
+        {
+            let mut last_emit = self.last_emit.lock().unwrap();
+            if *last_emit + self.min_interval > SystemTime::now() {
+                return Ok(());
+            }
+            *last_emit = SystemTime::now();
         }
-        *last_emit = SystemTime::now();
         let request = self
             .client
             .request(self.method.clone(), self.uri.clone())
@@ -118,7 +119,7 @@ impl Emitter for Http {
             Formats::Query => request.query(&payload),
             Formats::Form => request.form(&payload),
         };
-        request.send().await.map_err(HttpError::from)?;
+        request.send().map_err(HttpError::from)?;
         Ok(())
     }
 }

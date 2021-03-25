@@ -1,7 +1,6 @@
 use super::{Emitter, EmitterConfig};
 use crate::event::Event;
 use anyhow::Result;
-use async_trait::async_trait;
 use prometheus::{self, GaugeVec, Opts, Registry};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -57,9 +56,8 @@ impl EmitterConfig for PrometheusOptions {
     }
 }
 
-#[async_trait]
 impl Emitter for Prometheus {
-    async fn emit(&self, event: &Event) -> Result<()> {
+    fn emit(&self, event: &Event) -> Result<()> {
         let color: &'static str = (&event.color).into();
         self.temp_gauge
             .with_label_values(&[color])
@@ -68,14 +66,13 @@ impl Emitter for Prometheus {
             .with_label_values(&[color])
             .set(event.gravity.into());
         let metric_families = self.registry.gather();
-        prometheus::push_metrics_async(
+        prometheus::push_metrics(
             "tilted",
             HashMap::new(),
             &self.address,
             metric_families,
             None,
-        )
-        .await?;
+        )?;
         Ok(())
     }
 }

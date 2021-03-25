@@ -38,8 +38,7 @@ fn load(config_str: &str) -> Result<Vec<Box<dyn Emitter>>> {
     Ok(modules)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let config_str = read_to_string(opts.config)?;
@@ -50,7 +49,7 @@ async fn main() -> Result<()> {
     }
     let modules = modules.unwrap();
     let dispatcher = Dispatcher { modules };
-    bt::run(&dispatcher).await?;
+    bt::run(&dispatcher)?;
     Ok(())
 }
 

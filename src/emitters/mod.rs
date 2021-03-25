@@ -4,7 +4,6 @@ pub mod prometheus;
 
 use super::event::Event;
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -13,9 +12,8 @@ trait EmitterConfig {
     fn get_emitter(&self) -> Result<Box<dyn Emitter>>;
 }
 
-#[async_trait]
-pub trait Emitter: Send + Sync + Debug {
-    async fn emit(&self, event: &Event) -> Result<()>;
+pub trait Emitter: Debug {
+    fn emit(&self, event: &Event) -> Result<()>;
 }
 
 pub fn init(config: &HashMap<String, Emitters>) -> Result<Vec<Box<dyn Emitter>>> {

@@ -1,7 +1,6 @@
 use super::{Emitter, EmitterConfig};
 use crate::event::Event;
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::Deserialize;
 use thiserror::Error;
 use tracing::info;
@@ -22,9 +21,8 @@ impl EmitterConfig for LogOptions {
     }
 }
 
-#[async_trait]
 impl Emitter for Log {
-    async fn emit(&self, event: &Event) -> Result<()> {
+    fn emit(&self, event: &Event) -> Result<()> {
         info!("Received event {:?}", event);
         Ok(())
     }

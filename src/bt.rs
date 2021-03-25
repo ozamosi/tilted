@@ -6,11 +6,11 @@ use anyhow::{Context, Result};
 use nom::error::ErrorKind;
 use std::{
     convert::{TryFrom, TryInto},
-    os::unix::{io::FromRawFd, net::UnixStream as StdUnixStream},
+    io::Read,
+    os::unix::{io::FromRawFd, net::UnixStream},
     time::Duration,
 };
 use thiserror::Error;
-use tokio::{io::AsyncReadExt, net::UnixStream, time::interval};
 use tracing::error;
 use uuid::Uuid;
 
@@ -82,44 +82,38 @@ impl TryFrom<IBeacon> for Event {
     }
 }
 
-pub async fn run(dispatcher: &Dispatcher) -> Result<()> {
+pub fn run(dispatcher: &Dispatcher) -> Result<()> {
     let fd = open()?;
 
-    let stream = UnixStream::from_std(unsafe { StdUnixStream::from_raw_fd(fd) })?;
+    let stream = unsafe { UnixStream::from_raw_fd(fd) };
 
-    main_loop(stream, &dispatcher).await?;
+    main_loop(stream, &dispatcher)?;
     Ok(())
 }
 
-async fn main_loop<'a>(
-    mut stream: UnixStream,
-    dispatcher: &Dispatcher,
-) -> Result<(), anyhow::Error> {
+fn main_loop(mut stream: UnixStream, dispatcher: &Dispatcher) -> Result<(), anyhow::Error> {
     let mut buf = [0u8; 258];
-    let mut interval = interval(Duration::from_secs(2));
     loop {
-        interval.tick().await;
+        std::thread::sleep(Duration::from_secs(2));
         let old_filter = get_filter(&stream)?;
         set_filter(
             &stream,
             HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
         )?;
-        enable_le_scan(&mut stream).await?;
+        enable_le_scan(&mut stream)?;
         stream
             .read_exact(&mut buf[..3])
-            .await
             .context("Couldn't read header from bluetooth socket")?;
         let len = 3 + buf[2] as usize;
         stream
             .read_exact(&mut buf[3..len])
-            .await
             .context("Couldn't read body from bluetooth socket")?;
         set_filter(&stream, old_filter)?;
         if let Ok((_, events)) = bt_parser::<(&[u8], ErrorKind)>()(&buf[..len]) {
             for event in events {
                 if let Ok((_, ibeacon)) = ibeacon_parser::<(&[u8], ErrorKind)>()(&event.data) {
                     if let Ok(event) = ibeacon.try_into() {
-                        dispatcher.dispatch(&event).await;
+                        dispatcher.dispatch(&event);
                     }
                 }
             }

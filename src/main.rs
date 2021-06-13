@@ -43,11 +43,13 @@ fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
     let config_str = read_to_string(opts.config)?;
     let modules = load(&config_str);
-    if let Err(e) = modules {
-        error!("There was an error parsing the config: {}", e);
-        return Err(e);
-    }
-    let modules = modules.unwrap();
+    let modules = match modules {
+        Err(e) => {
+            error!("There was an error parsing the config: {}", e);
+            return Err(e);
+        }
+        Ok(modules) => modules,
+    };
     let dispatcher = Dispatcher { modules };
     bt::run(&dispatcher)?;
     Ok(())

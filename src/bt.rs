@@ -87,8 +87,27 @@ pub fn run(dispatcher: &Dispatcher) -> Result<()> {
 
     let stream = unsafe { UnixStream::from_raw_fd(fd) };
 
-    main_loop(stream, &dispatcher)?;
+    main_loop(stream, &dispatcher).map_err(|e| {
+        unsafe { libc::close(fd) };
+        e
+    })?;
     Ok(())
+}
+
+fn inner(stream: &mut UnixStream, buf: &mut [u8]) -> Result<usize, anyhow::Error> {
+    set_filter(
+        &stream,
+        HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
+    )?;
+    enable_le_scan(stream)?;
+    stream
+        .read_exact(&mut buf[..3])
+        .context("Couldn't read header from bluetooth socket")?;
+    let len = 3 + buf[2] as usize;
+    stream
+        .read_exact(&mut buf[3..len])
+        .context("Couldn't read body from bluetooth socket")?;
+    Ok(len)
 }
 
 fn main_loop(mut stream: UnixStream, dispatcher: &Dispatcher) -> Result<(), anyhow::Error> {
@@ -96,18 +115,10 @@ fn main_loop(mut stream: UnixStream, dispatcher: &Dispatcher) -> Result<(), anyh
     loop {
         std::thread::sleep(Duration::from_secs(2));
         let old_filter = get_filter(&stream)?;
-        set_filter(
-            &stream,
-            HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
-        )?;
-        enable_le_scan(&mut stream)?;
-        stream
-            .read_exact(&mut buf[..3])
-            .context("Couldn't read header from bluetooth socket")?;
-        let len = 3 + buf[2] as usize;
-        stream
-            .read_exact(&mut buf[3..len])
-            .context("Couldn't read body from bluetooth socket")?;
+        let len = inner(&mut stream, &mut buf).map_err(|err| {
+            let _ = set_filter(&stream, old_filter);
+            err
+        })?;
         set_filter(&stream, old_filter)?;
         if let Ok((_, events)) = bt_parser::<(&[u8], ErrorKind)>()(&buf[..len]) {
             for event in events {

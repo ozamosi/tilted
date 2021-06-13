@@ -1,8 +1,6 @@
 use nom::{
-    //branch::alt,
     bytes::complete::take,
     combinator::{all_consuming, flat_map, map, map_parser, verify},
-    error::ParseError,
     multi::count,
     number::complete::{be_i8, be_u8},
     sequence::{preceded, tuple},
@@ -62,9 +60,7 @@ enum AddressType {
     RandomIdentity = 0x03,
 }
 
-fn n_le_reports<'a, E: ParseError<&'a [u8]>>(
-    num_reports: usize,
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>, E> {
+fn n_le_reports<'a>(num_reports: usize) -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>> {
     map(
         tuple((
             count(map(be_u8, FromPrimitive::from_u8), num_reports),
@@ -95,9 +91,7 @@ fn n_le_reports<'a, E: ParseError<&'a [u8]>>(
     )
 }
 
-fn take_nums<'a, E: ParseError<&'a [u8]>>(
-    nums: Vec<u8>,
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<&'a [u8]>, E> {
+fn take_nums<'a>(nums: Vec<u8>) -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<&'a [u8]>> {
     move |i| {
         let mut i = i;
         let out = nums
@@ -112,45 +106,33 @@ fn take_nums<'a, E: ParseError<&'a [u8]>>(
     }
 }
 
-fn advertising_report_parser<'a, E: ParseError<&'a [u8]>>(
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>, E> {
+fn advertising_report_parser<'a>() -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>> {
     flat_map(be_u8, |x| n_le_reports(x.into()))
 }
 
-fn le_event_parser<'a, E: ParseError<&'a [u8]>>(
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>, E> {
-    //alt((
+fn le_event_parser<'a>() -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>> {
     preceded(
         verify(be_u8, |e| {
             FromPrimitive::from_u8(*e) == Some(LeEventSubcode::AdvertisingReport)
         }),
         advertising_report_parser(),
     )
-    //))
 }
 
-fn event_parser<'a, E: ParseError<&'a [u8]>>(
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>, E> {
-    //alt((
+fn event_parser<'a>() -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>> {
     preceded(
         verify(be_u8, |e| {
             FromPrimitive::from_u8(*e) == Some(EventCode::LeMeta)
         }),
         map_parser(flat_map(be_u8, take), all_consuming(le_event_parser())),
     )
-    //))
 }
 
-pub fn bt_parser<'a, E: ParseError<&'a [u8]>>(
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>, E> {
-    all_consuming(
-        //alt((
-        preceded(
-            verify(be_u8, |e| {
-                FromPrimitive::from_u8(*e) == Some(PacketType::Event)
-            }),
-            event_parser(),
-        ),
-        //))
-    )
+pub fn bt_parser<'a>() -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], Vec<LeEvent>> {
+    all_consuming(preceded(
+        verify(be_u8, |e| {
+            FromPrimitive::from_u8(*e) == Some(PacketType::Event)
+        }),
+        event_parser(),
+    ))
 }

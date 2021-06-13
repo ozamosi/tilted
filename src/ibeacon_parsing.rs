@@ -1,6 +1,5 @@
 use nom::{
     combinator::{map, verify},
-    error::ParseError,
     number::complete::{be_u128, be_u16, be_u8},
     sequence::tuple,
     IResult,
@@ -20,8 +19,7 @@ pub struct IBeacon {
     pub signal_power: u8,
 }
 
-pub fn ibeacon_parser<'a, E: ParseError<&'a [u8]>>(
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], IBeacon, E> {
+pub fn ibeacon_parser<'a>() -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], IBeacon> {
     map(
         tuple((
             verify(be_u8, |l| *l == 0x1a_u8),
@@ -61,11 +59,10 @@ pub fn ibeacon_parser<'a, E: ParseError<&'a [u8]>>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use nom::error::ErrorKind;
 
     #[test]
     fn test_parse_valid() -> Result<(), Box<dyn std::error::Error>> {
-        ibeacon_parser::<(&[u8], ErrorKind)>()(
+        ibeacon_parser()(
             b"\x1a\xffL\0\x02\x15\xa4\x95\xbb\x10\xc5\xb1KD\xb5\x12\x13p\xf0-t\xde\0:\x04,\xbf",
         )?;
         Ok(())

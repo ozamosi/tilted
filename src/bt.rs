@@ -1,7 +1,9 @@
-use crate::bluez::{enable_le_scan, get_filter, open, set_filter, HciEvent, HciFilter, HciType};
-use crate::bt_parsing::bt_parser;
-use crate::event::{Color, Dispatcher, Event};
-use crate::ibeacon_parsing::{ibeacon_parser, IBeacon};
+use crate::{
+    bluez::{enable_le_scan, get_filter, open, set_filter, HciEvent, HciFilter, HciType},
+    bt_parsing::bt_parser,
+    event::{Color, Dispatcher, Event},
+    ibeacon_parsing::{ibeacon_parser, IBeacon},
+};
 use anyhow::{Context, Result};
 use std::{
     convert::{TryFrom, TryInto},
@@ -10,7 +12,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
@@ -84,21 +86,23 @@ impl TryFrom<IBeacon> for Event {
 pub fn run(dispatcher: &Dispatcher) -> Result<()> {
     let fd = open()?;
 
-    let stream = unsafe { UnixStream::from_raw_fd(fd) };
+    let mut stream = unsafe { UnixStream::from_raw_fd(fd) };
 
-    main_loop(stream, &dispatcher).map_err(|e| {
+    enable_le_scan(&mut stream)?;
+    let old_filter = get_filter(&stream)?;
+    set_filter(
+        &stream,
+        HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
+    )?;
+    main_loop(&mut stream, &dispatcher).map_err(|e| {
+        let _ = set_filter(&stream, old_filter);
         unsafe { libc::close(fd) };
         e
     })?;
     Ok(())
 }
 
-fn inner(stream: &mut UnixStream, buf: &mut [u8]) -> Result<usize, anyhow::Error> {
-    set_filter(
-        &stream,
-        HciFilter::new(HciType::EventPkt, HciEvent::LeMetaEvent),
-    )?;
-    enable_le_scan(stream)?;
+fn read_package(stream: &mut UnixStream, buf: &mut [u8]) -> Result<usize, anyhow::Error> {
     stream
         .read_exact(&mut buf[..3])
         .context("Couldn't read header from bluetooth socket")?;
@@ -109,18 +113,13 @@ fn inner(stream: &mut UnixStream, buf: &mut [u8]) -> Result<usize, anyhow::Error
     Ok(len)
 }
 
-fn main_loop(mut stream: UnixStream, dispatcher: &Dispatcher) -> Result<(), anyhow::Error> {
+fn main_loop(stream: &mut UnixStream, dispatcher: &Dispatcher) -> Result<(), anyhow::Error> {
     let mut buf = [0u8; 258];
     loop {
-        std::thread::sleep(Duration::from_secs(2));
-        let old_filter = get_filter(&stream)?;
-        let len = inner(&mut stream, &mut buf).map_err(|err| {
-            let _ = set_filter(&stream, old_filter);
-            err
-        })?;
-        set_filter(&stream, old_filter)?;
+        let len = read_package(stream, &mut buf)?;
         if let Ok((_, events)) = bt_parser()(&buf[..len]) {
             for event in events {
+                debug!("Event {:?}", event);
                 if let Ok((_, ibeacon)) = ibeacon_parser()(&event.data) {
                     if let Ok(event) = ibeacon.try_into() {
                         dispatcher.dispatch(&event);

@@ -1,23 +1,17 @@
 use super::{Emitter, EmitterConfig};
 use crate::event::Event;
 use anyhow::Result;
-use prometheus::{self, GaugeVec, Opts, Registry};
 use serde::Deserialize;
-use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum PrometheusError {
-    #[error(transparent)]
-    PrometheusError(#[from] prometheus::Error),
-}
+pub enum PrometheusError {}
 
 #[derive(Debug)]
 pub struct Prometheus {
     address: String,
-    registry: Registry,
-    temp_gauge: GaugeVec,
-    gravity_gauge: GaugeVec,
+    temp_gauge_name: String,
+    gravity_gauge_name: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -32,26 +26,9 @@ impl EmitterConfig for PrometheusOptions {
     fn get_emitter(&self) -> Result<Box<dyn Emitter>> {
         let p = Prometheus {
             address: self.address.to_string(),
-            temp_gauge: GaugeVec::new(
-                Opts::new(self.temp_gauge_name.clone(), "The temperature reported")
-                    .variable_labels(vec!["color".to_owned()]),
-                &["color"],
-            )
-            .map_err(PrometheusError::from)?,
-            gravity_gauge: GaugeVec::new(
-                Opts::new(self.gravity_gauge_name.clone(), "The gravity reported")
-                    .variable_labels(vec!["color".to_owned()]),
-                &["color"],
-            )
-            .map_err(PrometheusError::from)?,
-            registry: Registry::new(),
+            temp_gauge_name: self.temp_gauge_name.clone(),
+            gravity_gauge_name: self.gravity_gauge_name.clone(),
         };
-        p.registry
-            .register(Box::new(p.temp_gauge.clone()))
-            .map_err(PrometheusError::from)?;
-        p.registry
-            .register(Box::new(p.gravity_gauge.clone()))
-            .map_err(PrometheusError::from)?;
         Ok(Box::new(p))
     }
 }
@@ -59,20 +36,15 @@ impl EmitterConfig for PrometheusOptions {
 impl Emitter for Prometheus {
     fn emit(&self, event: &Event) -> Result<()> {
         let color: &'static str = (&event.color).into();
-        self.temp_gauge
-            .with_label_values(&[color])
-            .set(event.temperature.into());
-        self.gravity_gauge
-            .with_label_values(&[color])
-            .set(event.gravity.into());
-        let metric_families = self.registry.gather();
-        prometheus::push_metrics(
-            "tilted",
-            HashMap::new(),
-            &self.address,
-            metric_families,
-            None,
-        )?;
+        let address = format!("{}/metrics/jobs/{}", self.address, "tilted");
+        ureq::post(&address).send_string(&format!(
+            "{}{{color={}}} {}",
+            self.temp_gauge_name, color, event.temperature
+        ))?;
+        ureq::post(&address).send_string(&format!(
+            "{}{{color={}}} {}",
+            self.gravity_gauge_name, color, event.gravity
+        ))?;
         Ok(())
     }
 }

@@ -3,7 +3,6 @@ use crate::bt_parsing::bt_parser;
 use crate::event::{Color, Dispatcher, Event};
 use crate::ibeacon_parsing::{ibeacon_parser, IBeacon};
 use anyhow::{Context, Result};
-use nom::error::ErrorKind;
 use std::{
     convert::{TryFrom, TryInto},
     io::Read,
@@ -120,9 +119,9 @@ fn main_loop(mut stream: UnixStream, dispatcher: &Dispatcher) -> Result<(), anyh
             err
         })?;
         set_filter(&stream, old_filter)?;
-        if let Ok((_, events)) = bt_parser::<(&[u8], ErrorKind)>()(&buf[..len]) {
+        if let Ok((_, events)) = bt_parser()(&buf[..len]) {
             for event in events {
-                if let Ok((_, ibeacon)) = ibeacon_parser::<(&[u8], ErrorKind)>()(&event.data) {
+                if let Ok((_, ibeacon)) = ibeacon_parser()(&event.data) {
                     if let Ok(event) = ibeacon.try_into() {
                         dispatcher.dispatch(&event);
                     }

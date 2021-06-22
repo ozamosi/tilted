@@ -1,28 +1,17 @@
 use super::{Emitter, EmitterConfig};
 use crate::event::Event;
 use anyhow::Result;
-use handlebars::Handlebars;
-use http::method::{InvalidMethod, Method};
-use reqwest::{blocking::Client, Error as ReqwestError};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
-    str::FromStr,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
 use thiserror::Error;
-use url::{ParseError, Url};
+use tinytemplate::TinyTemplate;
 
 #[derive(Error, Debug)]
-pub enum HttpError {
-    #[error("Please provide the method (e.g. POST/GET) to use for communicating with the service")]
-    MethodError(#[from] InvalidMethod),
-    #[error("Please provide the URL to connect to")]
-    UrlError(#[from] ParseError),
-    #[error(transparent)]
-    ReqwestException(#[from] ReqwestError),
-}
+pub enum HttpError {}
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -34,9 +23,8 @@ enum Formats {
 
 #[derive(Debug)]
 pub struct Http {
-    client: Client,
-    method: Method,
-    uri: Url,
+    method: String,
+    uri: String,
     content_type: String,
     payload: HashMap<String, String>,
     last_emit: Arc<Mutex<SystemTime>>,
@@ -78,9 +66,8 @@ fn default_method() -> String {
 impl EmitterConfig for HttpOptions {
     fn get_emitter(&self) -> Result<Box<dyn Emitter>> {
         Ok(Box::new(Http {
-            client: Client::new(),
-            method: Method::from_str(&self.method).map_err(HttpError::from)?,
-            uri: Url::parse(&self.url).map_err(HttpError::from)?,
+            method: self.method.clone(),
+            uri: self.url.clone(),
             content_type: self.content_type.clone(),
             format: self.format.clone(),
             payload: self.payload.clone(),
@@ -99,27 +86,35 @@ impl Emitter for Http {
             }
             *last_emit = SystemTime::now();
         }
-        let request = self
-            .client
-            .request(self.method.clone(), self.uri.clone())
-            .header("Content-type", &self.content_type);
-        let reg = Handlebars::new();
+        let mut request =
+            ureq::request(&self.method, &self.uri).set("Content-type", &self.content_type);
         let payload = self
             .payload
             .iter()
             .map(|(key, value)| {
-                Ok((
-                    reg.render_template(key, event)?,
-                    reg.render_template(value, event)?,
-                ))
+                let mut tt = TinyTemplate::new();
+                tt.add_template("key", key)?;
+                tt.add_template("value", value)?;
+                Ok((tt.render("key", event)?, tt.render("value", event)?))
             })
             .collect::<Result<HashMap<_, _>>>()?;
         let request = match self.format {
-            Formats::Json => request.json(&payload),
-            Formats::Query => request.query(&payload),
-            Formats::Form => request.form(&payload),
+            Formats::Json => request.send_json(ureq::serde_to_value(payload)?),
+            Formats::Form => request.send_form(
+                payload
+                    .iter()
+                    .map(|(x, y)| (x.as_ref(), y.as_ref()))
+                    .collect::<Vec<_>>()
+                    .as_ref(),
+            ),
+            Formats::Query => {
+                for (key, val) in payload {
+                    request = request.query(&key, &val);
+                }
+                request.send_string("")
+            }
         };
-        request.send().map_err(HttpError::from)?;
+        request?;
         Ok(())
     }
 }

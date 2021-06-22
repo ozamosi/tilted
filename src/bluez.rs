@@ -241,7 +241,7 @@ pub fn open() -> Result<RawFd, io::Error> {
     let fd: RawFd = unsafe {
         libc::socket(
             libc::AF_BLUETOOTH,
-            libc::SOCK_RAW | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+            libc::SOCK_RAW | libc::SOCK_CLOEXEC,
             BtProto::HCI as libc::c_int,
         )
     };
